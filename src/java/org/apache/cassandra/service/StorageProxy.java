@@ -105,8 +105,8 @@ public class StorageProxy implements StorageProxyMBean
 
     private static final double CONCURRENT_SUBREQUESTS_MARGIN = 0.10;
     private static Config conf;
-    private static final boolean enable_logging_slow_select_query;
-    private static final Long logging_slow_select_query_threshold_in_ms;
+    private static boolean enable_logging_slow_select_query;
+    private static Long logging_slow_select_query_threshold_in_ms;
 
     private StorageProxy()
     {
