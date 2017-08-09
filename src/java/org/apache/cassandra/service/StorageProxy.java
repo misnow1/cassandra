@@ -43,8 +43,11 @@ import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
 import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.concurrent.StageManager;
 import org.apache.cassandra.config.CFMetaData;
+import org.apache.cassandra.config.Config;
+import org.apache.cassandra.config.ConfigurationLoader;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.Schema;
+import org.apache.cassandra.config.YamlConfigurationLoader;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.TombstoneOverwhelmingException;
@@ -101,6 +104,9 @@ public class StorageProxy implements StorageProxyMBean
     private static final ViewWriteMetrics viewWriteMetrics = new ViewWriteMetrics("ViewWrite");
 
     private static final double CONCURRENT_SUBREQUESTS_MARGIN = 0.10;
+    private static Config conf;
+    private static final boolean enable_logging_slow_select_query;
+    private static final Long logging_slow_select_query_threshold_in_ms;
 
     private StorageProxy()
     {
@@ -308,6 +314,14 @@ public class StorageProxy implements StorageProxyMBean
                 casWriteMetrics.contention.update(contentions);
             casWriteMetrics.addNano(System.nanoTime() - start);
         }
+
+        String loaderClass = System.getProperty("cassandra.config.loader");
+        ConfigurationLoader loader = loaderClass == null
+                                     ? new YamlConfigurationLoader()
+                                     : FBUtilities.<ConfigurationLoader>construct(loaderClass, "configuration loading");
+        conf = loader.loadConfig();
+        enable_logging_slow_select_query = conf.enable_logging_slow_select_query;
+        logging_slow_select_query_threshold_in_ms = conf.logging_slow_select_query_threshold_in_ms;
     }
 
     private static Predicate<InetAddress> sameDCPredicateFor(final String dc)
@@ -1584,7 +1598,9 @@ public class StorageProxy implements StorageProxyMBean
         }
         finally
         {
-            long latency = System.nanoTime() - start;
+            Long latency = System.nanoTime() - start;
+            if (enable_logging_slow_select_query && latency.compareTo(logging_slow_select_query_threshold_in_ms * 1000000L) == 1)
+                logger.warn("slow-query(in read with paxos): execution time: {} ms, details: {}", latency / 1000000f, group.commands);
             readMetrics.addNano(latency);
             casReadMetrics.addNano(latency);
             Keyspace.open(metadata.ksName).getColumnFamilyStore(metadata.cfName).metric.coordinatorReadLatency.update(latency, TimeUnit.NANOSECONDS);
@@ -1624,7 +1640,9 @@ public class StorageProxy implements StorageProxyMBean
         }
         finally
         {
-            long latency = System.nanoTime() - start;
+            Long latency = System.nanoTime() - start;
+            if (enable_logging_slow_select_query && latency.compareTo(logging_slow_select_query_threshold_in_ms * 1000000L) == 1)
+                logger.warn("slow-query(in regular read): execution time: {} ms, details: {}", latency / 1000000f, group.commands);
             readMetrics.addNano(latency);
             // TODO avoid giving every command the same latency number.  Can fix this in CASSADRA-5329
             for (ReadCommand command : group.commands)
@@ -2135,7 +2153,9 @@ public class StorageProxy implements StorageProxyMBean
             }
             finally
             {
-                long latency = System.nanoTime() - startTime;
+                Long latency = System.nanoTime() - startTime;
+                if (enable_logging_slow_select_query && latency.compareTo(logging_slow_select_query_threshold_in_ms * 1000000L) == 1)
+                    logger.warn("slow-query(in range command): execution time: {} ms, details: {}", latency / 1000000f, command.toCQLString());
                 rangeMetrics.addNano(latency);
                 Keyspace.openAndGetStore(command.metadata()).metric.coordinatorScanLatency.update(latency, TimeUnit.NANOSECONDS);
             }

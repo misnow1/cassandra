@@ -96,6 +96,9 @@ public class Config
 
     public volatile Long truncate_request_timeout_in_ms = 60000L;
 
+    public boolean enable_logging_slow_select_query = false;
+    public volatile Long logging_slow_select_query_threshold_in_ms = 1000L;
+
     public Integer streaming_socket_timeout_in_ms = 86400000; //24 hours
 
     public boolean cross_node_timeout = false;

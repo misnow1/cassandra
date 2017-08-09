@@ -734,6 +734,10 @@ truncate_request_timeout_in_ms: 60000
 # The default timeout for other, miscellaneous operations
 request_timeout_in_ms: 10000
 
+enable_logging_slow_select_query: false
+# How long until the coordinator will log the execution time of select query
+logging_slow_select_query_threshold_in_ms: 1000
+
 # Enable operation timeout information exchange between nodes to accurately
 # measure request timeouts.  If disabled, replicas will assume that requests
 # were forwarded to them instantly by the coordinator, which means that
